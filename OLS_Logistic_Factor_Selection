@@ -3,11 +3,13 @@
 # The whole idea:
 The whole dataset can be devided into two main parts: Dependent variable and Independent variable. What we should do is to select a combination of independent variables and use them to predict dependent one.
 How can we compare among all the combinations:
-We use the sum of correctly predicts devided by all the predicts.
+
+First we assume the criteria is fixed, and then we can extend our model.
 
 How do we predict? We actually use the lag of combinations and model coefficient to do so! We assume a number, $\alpha$ between 0 and 1, if model using lag factors exceeds $\alpha$, we let predicted value to be 1, vice versa.
+Suppose $Y=X_t-1 *\beta$
 
-
+How do we tell which one is better? We use the sum of correctly predicts devided by all the predicts, and we call it Z SCORE!
 
 #Preparation
 
@@ -34,7 +36,8 @@ filtered_data<-data%>%select(columna,columnb...)
 returns<-filtered_data$Return
 Dep_Var<-ifelse(returns > 0, 1, 0)
 <!--Here put all regressors into a vector-->
-Ind_Var<-c() 
+Index_Ind<-c() 
+Ind_Var<-filtered_data%>%select(Index_Ind)
 ```
 <!--Here we use iteration function to find the best combination under alpha equals 0.5-->
 ```{r Iterate Function}
@@ -76,7 +79,5 @@ find_best_combination <- function(R_t, X_t, predictor_columns, alpha = 0.5) {
               best_Z_alpha = best_Z_alpha))
 }
 
-# List of predictors for US market
-us_predictors <- colnames(X_t_us)
 us_result <- find_best_combination(R_t_us, X_t_us, us_predictors, alpha = 0.5)
 ```
