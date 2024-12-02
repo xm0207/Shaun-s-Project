@@ -5,7 +5,7 @@ The whole dataset can be devided into two main parts: Dependent variable and Ind
 How can we compare among all the combinations:
 We use the sum of correctly predicts devided by all the predicts.
 
-How do we predict? We actually use the lag of combinations and model coefficient to do so!
+How do we predict? We actually use the lag of combinations and model coefficient to do so! We assume a number, $\alpha$ between 0 and 1, if model using lag factors exceeds $\alpha$, we let predicted value to be 1, vice versa.
 
 
 
@@ -18,12 +18,17 @@ library(stats)
 library(combinat) <!--This is used to generate all combinations given independent variables set.-->
 library(dplyr)
 ```
+
+## Loading data
+
 ```{r load data}
 file_path <- "your_data_path"
 data <- read_excel(file_path)
 filtered_data<-data%>%select(columna,columnb...)
 ```
 ##Now we transform the indicator and try to run regression
+
+## Transform return into 0s and 1s, and define independent variable set
 
 ```{r transform return to signals}
 returns<-filtered_data$Return
