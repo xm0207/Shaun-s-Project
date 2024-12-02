@@ -1,1 +1,11 @@
-
+```{r libraries}
+library(readxl)
+library(stats)
+library(combinat)
+library(dplyr)
+```
+```{r load data}
+file_path <- "your_data_path"
+data <- read_excel(file_path)
+flitered_data<-data%>%select(columna,columnb...)
+```
