@@ -1,5 +1,5 @@
+#Here, suppose we have a dependent variable to be if excess return of an single asset is positive. Also, we have a bunch of other independent variables which we want to select some of them that predict most precisely. 
 ##Preparation
-
 ```{r libraries}
 library(readxl)
 library(stats)
@@ -9,9 +9,57 @@ library(dplyr)
 ```{r load data}
 file_path <- "your_data_path"
 data <- read_excel(file_path)
-flitered_data<-data%>%select(columna,columnb...)
+filtered_data<-data%>%select(columna,columnb...)
 ```
 ##Now we transform the indicator and try to run regression
 
-```{r}
-Dep_Var
+```{r transform return to signals}
+returns<-filtered_data$Return
+Dep_Var<-ifelse(returns > 0, 1, 0)
+*Here put all regressors into a vector
+Ind_Var<-c() 
+```
+##Here we use iteration function to find the best combination under alpha equals 0.5
+```{r Iterate Function}
+find_best_combination <- function(R_t, X_t, predictor_columns, alpha = 0.5) {
+  best_Z_alpha <- 0
+  best_combination <- NULL
+  
+  # Iterate over all combinations of predictors
+  for (k in 1:length(predictor_columns)) {
+    combinations <- combn(predictor_columns, k, simplify = FALSE)
+    for (combo in combinations) {
+      # Subset predictors
+      X_subset <- X_t[, combo, drop = FALSE]
+      
+      # Align Y_{t+1} and X_t
+      Y_t <- ifelse(R_t > 0, 1, 0)
+      Y_next <- Y_t[-1]
+      X_current <- X_subset[-nrow(X_subset), ]
+      
+      # Fit OLS model
+      ols_model <- lm(Y_next ~ ., data = as.data.frame(cbind(Y_next, 
+                                                             X_current)))
+      P_hat <- predict(ols_model, newdata = as.data.frame(X_current))
+      
+      # Calculate Z_t(alpha)
+      Z_t <- ifelse((P_hat > alpha & R_t[-1] > 0) | (P_hat <= alpha & 
+                                                       R_t[-1] <= 0), 1, 0)
+      
+      # Compute Z(alpha)
+      Z_alpha <- mean(Z_t)
+      if (Z_alpha > best_Z_alpha) {
+        best_Z_alpha <- Z_alpha
+        best_combination <- combo
+      }
+    }
+  }
+  
+  return(list(best_combination = best_combination, 
+              best_Z_alpha = best_Z_alpha))
+}
+
+# List of predictors for US market
+us_predictors <- colnames(X_t_us)
+us_result <- find_best_combination(R_t_us, X_t_us, us_predictors, alpha = 0.5)
+```
