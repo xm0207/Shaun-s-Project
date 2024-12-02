@@ -1,3 +1,5 @@
+##Preparation
+
 ```{r libraries}
 library(readxl)
 library(stats)
@@ -9,3 +11,7 @@ file_path <- "your_data_path"
 data <- read_excel(file_path)
 flitered_data<-data%>%select(columna,columnb...)
 ```
+##Now we transform the indicator and try to run regression
+
+```{r}
+Dep_Var
