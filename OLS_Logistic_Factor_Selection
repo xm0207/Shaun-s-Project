@@ -1,9 +1,21 @@
-#Here, suppose we have a dependent variable to be if excess return of an single asset is positive. Also, we have a bunch of other independent variables which we want to select some of them that predict most precisely. 
-##Preparation
+<!--Here, suppose we have a dependent variable to be if excess return of an single asset is positive. Also, we have a bunch of other independent variables which we want to select some of them that predict most precisely. 
+-->
+# The whole idea:
+The whole dataset can be devided into two main parts: Dependent variable and Independent variable. What we should do is to select a combination of independent variables and use them to predict dependent one.
+How can we compare among all the combinations:
+We use the sum of correctly predicts devided by all the predicts.
+
+How do we predict? We actually use the lag of combinations and model coefficient to do so!
+
+
+
+#Preparation
+
+## Loading Libraries
 ```{r libraries}
 library(readxl)
 library(stats)
-library(combinat)
+library(combinat) <!--This is used to generate all combinations given independent variables set.-->
 library(dplyr)
 ```
 ```{r load data}
@@ -16,10 +28,10 @@ filtered_data<-data%>%select(columna,columnb...)
 ```{r transform return to signals}
 returns<-filtered_data$Return
 Dep_Var<-ifelse(returns > 0, 1, 0)
-*Here put all regressors into a vector
+<!--Here put all regressors into a vector-->
 Ind_Var<-c() 
 ```
-##Here we use iteration function to find the best combination under alpha equals 0.5
+<!--Here we use iteration function to find the best combination under alpha equals 0.5-->
 ```{r Iterate Function}
 find_best_combination <- function(R_t, X_t, predictor_columns, alpha = 0.5) {
   best_Z_alpha <- 0
