@@ -1,21 +1,3 @@
----
-title: Individual Course Project
-author: |
-  | Xiangzhong Meng, CID 06003586
-  | Business School, Imperial College London
-date: "22-11-2024"
-output:
-  pdf_document: default
-  html_document: default
-  
-
----
-
-\newpage
-\tableofcontents
-\listoffigures
-\listoftables
-\newpage
 
 ## Preparation Work
 
@@ -263,25 +245,3 @@ colnames(benchmark_returns)<-"Benchmark Returns"
 Compare_BO_Benchmark<-cbind(ResultBO_45_2,benchmark_returns)
 charts.PerformanceSummary(Compare_BO_Benchmark, geometric = FALSE, main = "Bollinger and Benchmark Performance Analysis")
 ```
-\newpage
-
-## Research Analysis
-Here are some analysis parts of this coursework. 
-
-### Autocorrelation Analysis
-
-The ACF analysis of the simple daily returns of PFE stock revealed no significant autocorrelation at most lags, suggesting a lack of temporal dependence in daily returns. This aligns with the efficient market hypothesis, where past price movements do not predict future prices. However, a  weekly return ACF showed a pronounced spike at lag 6, which could indicate a possible monthly cyclical pattern in stock performance. Such patterns might reflect external factors like seasonality or market sentiment cycles.
-For weekly returns $r_w$, we can have:
-$r_w=\mu+\epsilon_t+\alpha_6\epsilon_{w-6}$
-
-### Moving Average Crossover Strategy
-
-Using an optimization process based on Sharpe ratios, the best-performing strategy was identified as a 50-day fast MA and a 60-day slow MA. This combination balanced responsiveness to price changes with stability, providing a good trade-off between risk and return. The backtesting results highlighted that this strategy outperformed other combinations and maintained a steady return profile, though the gains were moderate compared to the benchmark. 
-
-Another explanation of 50-60 could be, that weekly return has a significant lag 6 ACF. 6*7=42 drs, which means that a fast MA of 50 contains most recent 10 drs, and irrelevant 40 days of information. A slow MA of 50 contains that 50 and another 10drs that is exactly lag 6 factor of the most recent 10 days.
-
-This means that a signal of 1 or -1 will be generated if the most 10 days trading data is significantly different from its lag 6 factor, which indicates a new market condition.
-
-### Bollinger Bands Breakout Strategy
-
-The 2 $\sigma$ approach effectively captured 95% of price movements, providing a robust framework for signal generation. Backtesting demonstrated the strategy's ability to outperform the benchmark in cumulative returns and risk-adjusted metrics, such as drawdowns. However, the performance was highly sensitive to parameter selection, suggesting the need for careful calibration to optimize accuracy and mitigate risk.
