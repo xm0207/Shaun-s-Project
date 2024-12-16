@@ -1,0 +1,80 @@
+```{r}
+library(dplyr)
+library(ggplot2)
+library(PerformanceAnalytics)
+library(lubridate)
+library(DescTools)
+```
+
+```{r}
+daily_sp500<-read.csv("sp500_2020_2023.csv")
+daily_sp500 <- daily_sp500 %>%
+  mutate(datadate = as.Date(as.character(datadate), format = "%d/%m/%Y"))
+daily_sp500<-daily_sp500%>%mutate(wday=ceiling_date(datadate,"week")-days(1))
+
+
+weekly_data <- daily_sp500 %>%
+  group_by(gvkey, wday) %>%
+  arrange(gvkey, datadate) %>%
+  summarize(wclose = last(prccd),ticker=last(tic),.groups = "drop")  
+weekly_returns <- weekly_data %>%
+  group_by(gvkey) %>%
+  mutate(weekly_return = (wclose / lag(wclose)) - 1) %>%
+  ungroup()
+```
+
+```{r}
+weekly_returns <- weekly_returns %>%
+  mutate(decile = ntile(weekly_return, 10))
+
+weekly_returns <- weekly_returns %>%
+  mutate(decile_label = paste0((decile - 1) * 10, "%"))
+
+```
+
+```{r}
+sixty_percent_group <- weekly_returns %>%
+  filter(decile_label == "60%")
+top_ticker <- sixty_percent_group %>%
+  arrange(desc(weekly_return)) %>%
+  slice(1)
+```
+
+```{r}
+ffm_data<-read.csv("fama_french_weekly.csv")
+ffm_data<-ffm_data%>%
+  mutate(datadate = as.Date(as.character(datadate), format = "%Y%m%d"))
+top_tic_weekly<-weekly_returns%>%filter(gvkey==top_ticker$gvkey)
+```
+
+
+```{r}
+top_tic_weekly<-top_tic_weekly%>%mutate(weekly_return=weekly_return*100)
+```
+
+```{r}
+ffm_data<-ffm_data%>%mutate(datadate=ceiling_date(datadate,"week")-days(1)) 
+```
+
+```{r}
+merged_data <- inner_join(top_tic_weekly, ffm_data, by = c("wday" = "datadate"))
+cleaned_data <- merged_data %>%
+  select(-decile, -decile_label)
+cleaned_data<-cleaned_data%>%mutate(ticker_premium=weekly_return-RF)
+cleaned_data<-cleaned_data%>%mutate(market_premium=Mkt.RF-RF)
+```
+
+```{r}
+ols_model <- lm(ticker_premium ~ SMB + HML + market_premium, data = cleaned_data)
+summary(ols_model)
+```
+
+```{r}
+lower_bound <- quantile(cleaned_data$ticker_premium, 0.01, na.rm = TRUE)
+upper_bound <- quantile(cleaned_data$ticker_premium, 0.99, na.rm = TRUE)
+cleaned_data <- cleaned_data %>%
+  mutate(winsored_tickpre = pmin(pmax(ticker_premium, lower_bound), upper_bound))
+win_ols_model <- lm(winsored_tickpre ~ SMB + HML + market_premium, data = cleaned_data)
+summary(win_ols_model)
+summary(ols_model)
+```
