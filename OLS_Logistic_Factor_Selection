@@ -79,5 +79,48 @@ find_best_combination <- function(R_t, X_t, predictor_columns, alpha = 0.5) {
               best_Z_alpha = best_Z_alpha))
 }
 
-us_result <- find_best_combination(R_t_us, X_t_us, us_predictors, alpha = 0.5)
+result <- find_best_combination(R_t, X_t, predictors, alpha = 0.5)
+```
+## What we've done
+From here, given an any $\alpha$, we can using these iteration to select optimized explaination variable set. Of course, it's based on a very fixed limit. How can we further expand this model to adjust parameter $\alpha$.
+
+## Iteration in different $\alpha$
+
+Codes above covers how to compute Z value as indicator of prediction ability, now what we have to do is to apply it to all $\alpha$ values. Using simple iteration from approximately 0.1 to 0.8, taking 0.01 as step length, we try to return the optimized, maximum Z value.
+```{r}
+compute_Z_alpha_fixed <- function(alpha, R_t, X_t, predictors) {
+  # Subset predictors
+  X_subset <- X_t[, predictors, drop = FALSE]
+  
+  # Align Y_{t+1} and X_t
+  Y_t <- ifelse(R_t > 0, 1, 0)
+  Y_next <- Y_t[-1]
+  X_current <- X_subset[-nrow(X_subset), ]
+  
+  # Fit OLS model
+  ols_model <- lm(Y_next ~ ., data = as.data.frame(cbind(Y_next, X_current)))
+  P_hat <- predict(ols_model, newdata = as.data.frame(X_current))
+  
+  # Calculate Z_t(alpha)
+  Z_t <- ifelse((P_hat > alpha & R_t[-1] > 0) | (P_hat <= alpha & 
+                                                   R_t[-1] <= 0), 1, 0)
+  
+  # Compute Z(alpha)
+  return(mean(Z_t))
+}
+
+# Values of alpha to test
+alpha_values <- seq(0.1, 0.8, by = 0.01)
+
+# Input the found best combination
+best_predictor <- c("")
+
+# Calculate Z(alpha) for each alpha
+Z_alpha_values_emu <- sapply(alpha_values, function(alpha) {
+}
+
+# Find the alpha that maximizes Z(alpha)
+optimal_alpha <- alpha_values[which.max(Z_alpha_values_emu)]
+max_Z_alpha <- max(Z_alpha_values_emu)
+
 ```
