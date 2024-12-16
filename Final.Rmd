@@ -1,0 +1,287 @@
+---
+title: Individual Course Project
+author: |
+  | Xiangzhong Meng, CID 06003586
+  | Business School, Imperial College London
+date: "22-11-2024"
+output:
+  pdf_document: default
+  html_document: default
+  
+
+---
+
+\newpage
+\tableofcontents
+\listoffigures
+\listoftables
+\newpage
+
+## Preparation Work
+
+### Loading Libraries and R script 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+#Load needed libraries, and pre-write functions of signals-generating, backtesting, and optimization.
+library(dplyr)
+library(ggplot2)
+library(PerformanceAnalytics)
+library(lubridate)
+library(xts)
+library(quantmod)
+library(dtplyr)
+library(data.table)
+source("RFunction.R")
+```
+
+### Load Whole Data in csv file, name as daily_data
+Here we use datatable and fread to load big data dataset. This is much more efficient.
+```{r message=FALSE, warning=FALSE}
+#Load data from csv Document
+daily_data<-fread("compustat_sec_daily.csv")
+```
+
+### Filter stock PFE data and load into PFE_data
+```{r}
+#select required data from daily data
+PFE_data<-daily_data%>%filter(tic=="PFE")
+```
+
+### Data cleansing
+
+Here we transform datadate using as.Date formula.
+Use mutate to calculate simple daily return.
+Distinct can delete duplicate data.
+
+```{r table-head}
+#clean the date data structure, delete duplicate data, and add column of simple daily return
+PFE_data<-PFE_data%>%mutate(datadate = as.Date(as.character(datadate), format = "%Y-%m-%d"))
+PFE_data<-PFE_data%>%mutate(simple_daily_returns=prccd/lag(prccd)-1)
+PFE_data<-PFE_data%>%distinct()
+head(PFE_data)
+```
+\newpage
+## Autocorrelations Presenting
+
+### Daily Simple returns Correlation
+
+Use acf function to draw acf graph of simple daily returns. The graph shows correlation of lag returns is not statistically large.
+```{r chart-Daily-ACF, fig.cap="Autocorrelation of Simple Daily Returns"}
+#write the daily simple return autocorrelation function
+cleaned_data<-na.omit(PFE_data)
+acf(cleaned_data$simple_daily_returns, main = "Autocorrelation of Simple Daily Returns")
+```
+
+### Acf comparasion in weekly basis.
+
+Firstly, we use ceiling_date to obtain each datadate's weekly ending day, which we can use as key in groupby functions.
+Then, use summary function in groups.
+The ACM graph shows a greater correlation between lag 0 and lag 6. This probably indicates a month-factor, like seasonal factor of stock returns.
+
+```{r chart-Weekly, fig.cap="Autocorrelation of Weekly Average Returns"}
+#Here, write the weekly return autocorrelation function
+#From the result, We can see the lag(6) has a high autocorrelation
+cleaned_data<-cleaned_data%>%mutate(wday=ceiling_date(datadate,"week")-days(1))
+weekly_data <-cleaned_data%>%group_by(wday)%>%arrange(datadate)%>%summarize(wclose = last(prccd),.groups = "drop")
+weekly_data<-weekly_data%>%mutate(weekly_return = (wclose / lag(wclose)) - 1)%>%na.omit()
+acf(weekly_data$weekly_return, main="Autocorrelation of weekly Average Returns")
+```
+
+\newpage
+
+## FSMA Trading strategies
+
+### Define dataset and fast, slow MA windows
+
+Here we use xts format to load daily price of PFE stock.
+Then, we load possible values of MA windows in vectors.
+
+```{r}
+# Define the grid of window sizes and prices xts
+pfe_xts <- xts(cleaned_data$prccd, order.by = cleaned_data$datadate)
+colnames(pfe_xts)[1] <- "prccd"
+fast_windows<-c(20,30,40,50)
+slow_windows<-c(60,90,120,150)
+```
+
+### Load benchmark for comparason
+
+Here we use simple returns as benchmark,load it into xts format, and we can use it in following Performance Summary function.
+```{r}
+#setup benchmark
+benchmark_returns <- pfe_xts / stats::lag(pfe_xts) - 1
+```
+
+### FSMA Window optimization.
+
+In R script, I wrote three main functions.
+generate_signals: To generate signals using stock FMA SMA relationships, and return signals in xts format.
+
+Backtest: use lag(signals) to generate accumulated returns using the strategies
+
+optimize_window: I wrote iterations using i and j denoting selection of MA Windows. I store all accumulative returns using cbind, and drew Performace summary chart along with benchmark. The optimized window could be determined visually or depending on financial retios like Sharpe ratio.
+
+The best combination on Sharpe ratio is 50-60 combination.For it adjust quickly and contains enough information. 
+
+Here I drop my functions below:
+```{r}
+generate_signals <- function(xtsdata, fast_window, slow_window) {
+  fast_ma <- xtsdata * NA
+  slow_ma<- xtsdata*NA
+  for (i in fast_window:length(xtsdata)) {
+    fast_ma[i] <- sum(xtsdata[(i - fast_window + 1):i])/fast_window
+  }
+  for (i in slow_window:length(xtsdata)) {
+    slow_ma[i] <- sum(xtsdata[(i - slow_window + 1):i])/slow_window
+  } 
+  signals<-sign(fast_ma-slow_ma)
+  return (signals)
+  
+}
+
+backtest<-function(xtsdata,signals){
+  
+  returns <- xtsdata / stats::lag(xtsdata) - 1
+  strategyReturns <- stats::lag(signals) * returns
+  returns[is.na(returns)] <- 0
+  strategyReturns[is.na(strategyReturns)] <- 0
+  return(strategyReturns)
+}
+  
+optimize_window <- function(xtsdata, fast_windows, slow_windows, benchmark, title = "Performance Analysis") {
+  colnames(benchmark)<-("Benchmark")
+  all_returns <- benchmark
+  performance_metrics <- data.frame() 
+  
+  
+  for (i in seq_along(fast_windows)) {
+    for (j in seq_along(slow_windows)) {
+      
+      signals <- generate_signals(xtsdata, fast_windows[i], slow_windows[j])
+      
+      
+      strategy_returns <- backtest(xtsdata, signals)
+      
+      
+      col_name <- paste0("StrategyReturns_", fast_windows[i], "_", slow_windows[j])
+      colnames(strategy_returns) <- col_name
+      
+      
+      all_returns <- cbind(all_returns, strategy_returns)
+      
+      
+      cumulative_return <- prod(1 + na.omit(strategy_returns)) - 1  
+      annualized_return <- mean(strategy_returns) * 252            
+      annualized_sd <- sd(strategy_returns) * sqrt(252)            
+      sharpe_ratio <- annualized_return / annualized_sd            
+      max_drawdown <- maxDrawdown(strategy_returns)                
+      
+     
+      performance_metrics <- rbind(performance_metrics, data.frame(
+        Strategy = col_name,
+        CumulativeReturn = cumulative_return,
+        AnnualizedReturn = annualized_return,
+        AnnualizedSD = annualized_sd,
+        SharpeRatio = sharpe_ratio,
+        MaxDrawdown = max_drawdown
+      ))
+    }
+  }
+  
+  
+  charts.PerformanceSummary(all_returns, geometric = FALSE, main = title)
+  
+  
+  best_strategy <- performance_metrics[which.max(performance_metrics$SharpeRatio), ]
+  
+  
+  return(list(
+    AllReturns = all_returns,
+    PerformanceMetrics = performance_metrics,
+    BestStrategy = best_strategy
+  ))
+}
+```
+
+```{r chart-FSMA, fig.cap="FSMA Strategy and Benchmark Performance Analysis"}
+#Back-test all possible combinations of fast/slow windows and show them by plotting Performance Summary.
+#Taking Sharpe Ratio as key ratio, select the best strategy from the result list, and 50-60 stragegy wins.
+optimize_result<-optimize_window(pfe_xts,fast_windows,slow_windows,benchmark_returns)
+best_strategy_name <-optimize_result[["BestStrategy"]]$Strategy
+print(paste0("Best Sharpe-Ratio Strategy is ",best_strategy_name))
+```
+\newpage
+## Bollinger Strategy
+
+### Signal generating
+
+Using chat gpt 4o, I wrote signal generate_Bollinger_45.
+This means the MA line window is maunally selected to be 45, as this is close to optimized fast, slow MA windows.
+
+Bollinger strategy also involves an upper band and a lower band, here I use 2 times std of returns, for it explained 95% of return variations.
+
+```{r}
+#define function generate_bollinger_signals
+generate_bollinger_signals <- function(xtsdata, n, k) {
+  # use two xts data to fill mean and std
+  rolling_mean <- xtsdata * NA
+  rolling_sd <- xtsdata * NA
+  
+  # compute std and mean in rolling basis
+  for (i in n:length(xtsdata)) {
+    rolling_mean[i] <- mean(xtsdata[(i - n + 1):i])
+    rolling_sd[i] <- sd(xtsdata[(i - n + 1):i])
+  }
+  
+  # compute upper band and lower band with in 2 std
+  upper_band <- rolling_mean + k * rolling_sd
+  lower_band <- rolling_mean - k * rolling_sd
+  
+  # generate signals
+   signals <- sign((xtsdata - upper_band) * (xtsdata - lower_band))
+  
+  # return signals
+  return(signals)
+}
+```
+
+### Backtest
+
+Here I backtest the strategy using above backtest function and retult shows Bollinger Strategy is efficient to return generating and drawdown comparasons. This strategy also involves great parameter selection. Different selection will result in different accuracy and risk-adjusted returns.
+
+```{r}
+#Here we generate signals. Bollinger strategy should choose a MA window, from fast-slow window above, we choose 45 days as window, and plus\minus 2 times standard deviation, as this explains 95% of the price changes.
+signals_Bollinger<-generate_bollinger_signals(pfe_xts,45,2)
+
+```
+
+```{r chart-Bollinger, fig.cap="Bollinger and Benchmark Performance Analysis"}
+#Here we backtest our strategy
+ResultBO_45_2<-backtest(pfe_xts,signals_Bollinger)
+colnames(ResultBO_45_2)<-"Bollinger Returns"
+colnames(benchmark_returns)<-"Benchmark Returns"
+Compare_BO_Benchmark<-cbind(ResultBO_45_2,benchmark_returns)
+charts.PerformanceSummary(Compare_BO_Benchmark, geometric = FALSE, main = "Bollinger and Benchmark Performance Analysis")
+```
+\newpage
+
+## Research Analysis
+Here are some analysis parts of this coursework. 
+
+### Autocorrelation Analysis
+
+The ACF analysis of the simple daily returns of PFE stock revealed no significant autocorrelation at most lags, suggesting a lack of temporal dependence in daily returns. This aligns with the efficient market hypothesis, where past price movements do not predict future prices. However, a  weekly return ACF showed a pronounced spike at lag 6, which could indicate a possible monthly cyclical pattern in stock performance. Such patterns might reflect external factors like seasonality or market sentiment cycles.
+For weekly returns $r_w$, we can have:
+$r_w=\mu+\epsilon_t+\alpha_6\epsilon_{w-6}$
+
+### Moving Average Crossover Strategy
+
+Using an optimization process based on Sharpe ratios, the best-performing strategy was identified as a 50-day fast MA and a 60-day slow MA. This combination balanced responsiveness to price changes with stability, providing a good trade-off between risk and return. The backtesting results highlighted that this strategy outperformed other combinations and maintained a steady return profile, though the gains were moderate compared to the benchmark. 
+
+Another explanation of 50-60 could be, that weekly return has a significant lag 6 ACF. 6*7=42 drs, which means that a fast MA of 50 contains most recent 10 drs, and irrelevant 40 days of information. A slow MA of 50 contains that 50 and another 10drs that is exactly lag 6 factor of the most recent 10 days.
+
+This means that a signal of 1 or -1 will be generated if the most 10 days trading data is significantly different from its lag 6 factor, which indicates a new market condition.
+
+### Bollinger Bands Breakout Strategy
+
+The 2 $\sigma$ approach effectively captured 95% of price movements, providing a robust framework for signal generation. Backtesting demonstrated the strategy's ability to outperform the benchmark in cumulative returns and risk-adjusted metrics, such as drawdowns. However, the performance was highly sensitive to parameter selection, suggesting the need for careful calibration to optimize accuracy and mitigate risk.
